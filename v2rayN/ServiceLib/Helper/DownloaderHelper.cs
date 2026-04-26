@@ -7,7 +7,7 @@ public class DownloaderHelper
     private static readonly Lazy<DownloaderHelper> _instance = new(() => new());
     public static DownloaderHelper Instance => _instance.Value;
 
-    public async Task<string?> DownloadStringAsync(IWebProxy? webProxy, string url, string? userAgent, int timeout)
+    public async Task<string?> DownloadStringAsync(IWebProxy? webProxy, string url, string? userAgent, string? customHeaders, int timeout)
     {
         if (url.IsNullOrEmpty())
         {
@@ -15,12 +15,9 @@ public class DownloaderHelper
         }
 
         Uri uri = new(url);
-        //Authorization Header
-        var headers = new WebHeaderCollection();
-        if (uri.UserInfo.IsNotEmpty())
-        {
-            headers.Add(HttpRequestHeader.Authorization, "Basic " + Utils.Base64Encode(uri.UserInfo));
-        }
+        var parsedHeaders = SubscriptionRequestHeaderHelper.Parse(customHeaders);
+        var finalUserAgent = SubscriptionRequestHeaderHelper.ResolveUserAgent(userAgent, parsedHeaders, () => Utils.GetVersion(false));
+        var headers = SubscriptionRequestHeaderHelper.BuildWebHeaders(uri, parsedHeaders);
 
         var downloadOpt = new DownloadConfiguration()
         {
@@ -29,7 +26,7 @@ public class DownloaderHelper
             RequestConfiguration =
                 {
                     Headers = headers,
-                    UserAgent = userAgent,
+                    UserAgent = finalUserAgent,
                     ConnectTimeout = timeout * 1000,
                     Proxy = webProxy
                 }

@@ -86,11 +86,11 @@ public class DownloadService
         }
     }
 
-    public async Task<string?> TryDownloadString(string url, bool blProxy, string userAgent)
+    public async Task<string?> TryDownloadString(string url, bool blProxy, string userAgent, string? customHeaders = null)
     {
         try
         {
-            var result1 = await DownloadStringAsync(url, blProxy, userAgent, 15);
+            var result1 = await DownloadStringAsync(url, blProxy, userAgent, customHeaders, 15);
             if (result1.IsNotEmpty())
             {
                 return result1;
@@ -108,7 +108,7 @@ public class DownloadService
 
         try
         {
-            var result2 = await DownloadStringViaDownloader(url, blProxy, userAgent, 15);
+            var result2 = await DownloadStringViaDownloader(url, blProxy, userAgent, customHeaders, 15);
             if (result2.IsNotEmpty())
             {
                 return result2;
@@ -131,7 +131,7 @@ public class DownloadService
     /// DownloadString
     /// </summary>
     /// <param name="url"></param>
-    private async Task<string?> DownloadStringAsync(string url, bool blProxy, string userAgent, int timeout)
+    private async Task<string?> DownloadStringAsync(string url, bool blProxy, string userAgent, string? customHeaders, int timeout)
     {
         try
         {
@@ -142,18 +142,10 @@ public class DownloadService
                 UseProxy = webProxy != null
             });
 
-            if (userAgent.IsNullOrEmpty())
-            {
-                userAgent = Utils.GetVersion(false);
-            }
-            client.DefaultRequestHeaders.UserAgent.TryParseAdd(userAgent);
-
             Uri uri = new(url);
-            //Authorization Header
-            if (uri.UserInfo.IsNotEmpty())
-            {
-                client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Basic", Utils.Base64Encode(uri.UserInfo));
-            }
+            var parsedHeaders = SubscriptionRequestHeaderHelper.Parse(customHeaders);
+            var finalUserAgent = SubscriptionRequestHeaderHelper.ResolveUserAgent(userAgent, parsedHeaders, () => Utils.GetVersion(false));
+            SubscriptionRequestHeaderHelper.ApplyHttpHeaders(client.DefaultRequestHeaders, uri, finalUserAgent, parsedHeaders);
 
             using var cts = new CancellationTokenSource();
             var result = await client.GetStringAsync(url, cts.Token).WaitAsync(TimeSpan.FromSeconds(timeout), cts.Token);
@@ -175,17 +167,12 @@ public class DownloadService
     /// DownloadString
     /// </summary>
     /// <param name="url"></param>
-    private async Task<string?> DownloadStringViaDownloader(string url, bool blProxy, string userAgent, int timeout)
+    private async Task<string?> DownloadStringViaDownloader(string url, bool blProxy, string userAgent, string? customHeaders, int timeout)
     {
         try
         {
             var webProxy = await GetWebProxy(blProxy);
-
-            if (userAgent.IsNullOrEmpty())
-            {
-                userAgent = Utils.GetVersion(false);
-            }
-            var result = await DownloaderHelper.Instance.DownloadStringAsync(webProxy, url, userAgent, timeout);
+            var result = await DownloaderHelper.Instance.DownloadStringAsync(webProxy, url, userAgent, customHeaders, timeout);
             return result;
         }
         catch (Exception ex)

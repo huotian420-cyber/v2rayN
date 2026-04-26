@@ -46,6 +46,12 @@ public class SubEditViewModel : MyReactiveObject
             }
         }
 
+        if (!SubscriptionRequestHeaderHelper.IsValid(SelectedSource.CustomHeaders))
+        {
+            NoticeManager.Instance.Enqueue("Invalid custom headers. Use one header per line: Header: Value");
+            return;
+        }
+
         if (await ConfigHandler.AddSubItem(_config, SelectedSource) == 0)
         {
             NoticeManager.Instance.Enqueue(ResUI.OperationSuccess);

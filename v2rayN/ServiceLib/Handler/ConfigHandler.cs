@@ -1865,6 +1865,7 @@ public static class ConfigHandler
             item.Enabled = subItem.Enabled;
             item.AutoUpdateInterval = subItem.AutoUpdateInterval;
             item.UserAgent = subItem.UserAgent;
+            item.CustomHeaders = subItem.CustomHeaders;
             item.Sort = subItem.Sort;
             item.Filter = subItem.Filter;
             item.UpdateTime = subItem.UpdateTime;

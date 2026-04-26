@@ -90,14 +90,14 @@ public static class SubscriptionHandler
         return downloadHandle;
     }
 
-    private static async Task<string> DownloadSubscriptionContent(DownloadService downloadHandle, string url, bool blProxy, string userAgent)
+    private static async Task<string> DownloadSubscriptionContent(DownloadService downloadHandle, string url, bool blProxy, string userAgent, string? customHeaders)
     {
-        var result = await downloadHandle.TryDownloadString(url, blProxy, userAgent);
+        var result = await downloadHandle.TryDownloadString(url, blProxy, userAgent, customHeaders);
 
         // If download with proxy fails, try direct connection
         if (blProxy && result.IsNullOrEmpty())
         {
-            result = await downloadHandle.TryDownloadString(url, false, userAgent);
+            result = await downloadHandle.TryDownloadString(url, false, userAgent, customHeaders);
         }
 
         return result ?? string.Empty;
@@ -143,7 +143,7 @@ public static class SubscriptionHandler
         }
 
         // Download and return result directly
-        return await DownloadSubscriptionContent(downloadHandle, url, blProxy, item.UserAgent);
+        return await DownloadSubscriptionContent(downloadHandle, url, blProxy, item.UserAgent, item.CustomHeaders);
     }
 
     private static async Task<string> DownloadAdditionalSubscriptions(SubItem item, string mainResult, bool blProxy, DownloadService downloadHandle)
@@ -166,7 +166,7 @@ public static class SubscriptionHandler
                 continue;
             }
 
-            var additionalResult = await DownloadSubscriptionContent(downloadHandle, url2, blProxy, item.UserAgent);
+            var additionalResult = await DownloadSubscriptionContent(downloadHandle, url2, blProxy, item.UserAgent, item.CustomHeaders);
 
             if (additionalResult.IsNotEmpty())
             {
