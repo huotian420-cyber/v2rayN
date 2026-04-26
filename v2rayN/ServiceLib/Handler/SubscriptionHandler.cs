@@ -1,3 +1,5 @@
+using ServiceLib.Helper;
+
 namespace ServiceLib.Handler;
 
 public static class SubscriptionHandler
@@ -100,7 +102,7 @@ public static class SubscriptionHandler
             result = await downloadHandle.TryDownloadString(url, false, userAgent, customHeaders);
         }
 
-        return result ?? string.Empty;
+        return SubscriptionSecureHelper.ResolveDownloadedContent(url, result);
     }
 
     private static async Task<string> DownloadAllSubscriptions(Config config, SubItem item, bool blProxy, DownloadService downloadHandle)
