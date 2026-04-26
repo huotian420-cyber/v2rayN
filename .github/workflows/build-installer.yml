@@ -1,0 +1,38 @@
+name: build Windows installer
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - master
+
+jobs:
+  build-installer:
+    runs-on: windows-latest
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v6.0.2
+      with:
+        submodules: 'recursive'
+        fetch-depth: '0'
+
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v5.2.0
+      with:
+        dotnet-version: '8.0.x'
+
+    - name: Install Inno Setup
+      run: choco install innosetup --no-progress -y
+
+    - name: Build installer
+      working-directory: ./v2rayN
+      shell: pwsh
+      run: ./scripts/build-installer.ps1
+
+    - name: Upload installer artifact
+      uses: actions/upload-artifact@v7.0.1
+      with:
+        name: v2rayN-installer-win-x64
+        path: artifacts/v2rayN/installer/v2rayN-setup-win-x64-*.exe
+        if-no-files-found: error
