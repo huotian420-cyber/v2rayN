@@ -5,6 +5,113 @@ param(
 
 $ErrorActionPreference = "Stop"
 
+Add-Type -AssemblyName System.IO.Compression.FileSystem
+
+function Get-CoreBundleName {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Runtime
+    )
+
+    switch ($Runtime) {
+        "win-x64" { return "v2rayN-windows-64" }
+        "win-arm64" { return "v2rayN-windows-arm64" }
+        default { throw "Unsupported runtime '$Runtime' for official v2rayN core bundle." }
+    }
+}
+
+function Invoke-DownloadFile {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Url,
+        [Parameter(Mandatory = $true)]
+        [string]$Destination,
+        [long]$MinimumBytes = 1MB,
+        [int]$Attempts = 3
+    )
+
+    $parent = Split-Path -Parent $Destination
+    if ($parent) {
+        New-Item -ItemType Directory -Force -Path $parent | Out-Null
+    }
+
+    if (Test-Path $Destination) {
+        $existing = Get-Item -LiteralPath $Destination -ErrorAction SilentlyContinue
+        if ($existing -and $existing.Length -ge $MinimumBytes) {
+            try {
+                [IO.Compression.ZipFile]::OpenRead($Destination).Dispose()
+                return
+            } catch {
+                Remove-Item -LiteralPath $Destination -Force -ErrorAction SilentlyContinue
+            }
+        }
+    }
+
+    for ($attempt = 1; $attempt -le $Attempts; $attempt++) {
+        if (Test-Path $Destination) {
+            Remove-Item -LiteralPath $Destination -Force
+        }
+
+        try {
+            Invoke-WebRequest -Uri $Url -OutFile $Destination
+            $file = Get-Item -LiteralPath $Destination -ErrorAction Stop
+            if ($file.Length -lt $MinimumBytes) {
+                throw "Downloaded file is unexpectedly small ($($file.Length) bytes)."
+            }
+
+            [IO.Compression.ZipFile]::OpenRead($Destination).Dispose()
+            return
+        } catch {
+            if ($attempt -ge $Attempts) {
+                throw
+            }
+
+            Start-Sleep -Seconds ([Math]::Min(5 * $attempt, 15))
+        }
+    }
+}
+
+function Copy-CoreBundleIntoPublishDir {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Runtime,
+        [Parameter(Mandatory = $true)]
+        [string]$PublishDir,
+        [Parameter(Mandatory = $true)]
+        [string]$ArtifactsRoot
+    )
+
+    $bundleName = Get-CoreBundleName -Runtime $Runtime
+    $downloadUrl = "https://raw.githubusercontent.com/2dust/v2rayN-core-bin/master/$bundleName.zip"
+    $cacheDir = Join-Path $ArtifactsRoot "core-bundle"
+    $zipPath = Join-Path $cacheDir "$bundleName.zip"
+    $extractDir = Join-Path $cacheDir $bundleName
+
+    if (Test-Path $extractDir) {
+        Remove-Item -LiteralPath $extractDir -Recurse -Force -ErrorAction SilentlyContinue
+    }
+
+    Invoke-DownloadFile -Url $downloadUrl -Destination $zipPath -MinimumBytes 10MB
+    Expand-Archive -LiteralPath $zipPath -DestinationPath $cacheDir -Force
+
+    $coreRootCandidates = @(
+        $extractDir,
+        (Join-Path $extractDir $bundleName)
+    ) | Where-Object { Test-Path $_ }
+
+    $coreRoot = $coreRootCandidates |
+        Where-Object { Test-Path (Join-Path $_ "bin") } |
+        Select-Object -First 1
+
+    if (-not $coreRoot) {
+        throw "Unable to locate 'bin' directory inside $bundleName.zip"
+    }
+
+    Get-ChildItem -LiteralPath $coreRoot -Force | ForEach-Object {
+        Copy-Item -LiteralPath $_.FullName -Destination $PublishDir -Recurse -Force
+    }
+}
+
 $repoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
 $workRoot = Split-Path $repoRoot -Parent
 $artifactsRoot = Join-Path $workRoot "artifacts\v2rayN"
@@ -38,8 +145,14 @@ if (-not $iscc) {
     throw "ISCC.exe not found"
 }
 
-New-Item -ItemType Directory -Force -Path $publishDir | Out-Null
+if (Test-Path $publishDir) {
+    Remove-Item -LiteralPath $publishDir -Recurse -Force
+}
+
 New-Item -ItemType Directory -Force -Path $installerDir | Out-Null
+New-Item -ItemType Directory -Force -Path $publishDir | Out-Null
+
+Copy-CoreBundleIntoPublishDir -Runtime $Runtime -PublishDir $publishDir -ArtifactsRoot $artifactsRoot
 
 & $dotnet publish $v2rayNCsproj -c $Configuration -r $Runtime --self-contained true -o $publishDir
 & $dotnet publish $amazToolCsproj -c $Configuration -r $Runtime --self-contained true -o (Join-Path $publishDir "AmazTool")
