@@ -94,12 +94,13 @@ public static class SubscriptionHandler
 
     private static async Task<string> DownloadSubscriptionContent(DownloadService downloadHandle, string requestUrl, string secureSourceUrl, bool blProxy, string userAgent, string? customHeaders)
     {
-        var result = await downloadHandle.TryDownloadString(requestUrl, blProxy, userAgent, customHeaders);
+        var downloadUrl = SubscriptionSecureHelper.ToDownloadUrl(requestUrl);
+        var result = await downloadHandle.TryDownloadString(downloadUrl, blProxy, userAgent, customHeaders);
 
         // If download with proxy fails, try direct connection
         if (blProxy && result.IsNullOrEmpty())
         {
-            result = await downloadHandle.TryDownloadString(requestUrl, false, userAgent, customHeaders);
+            result = await downloadHandle.TryDownloadString(downloadUrl, false, userAgent, customHeaders);
         }
 
         return SubscriptionSecureHelper.ResolveDownloadedContent(secureSourceUrl, result);
@@ -123,7 +124,8 @@ public static class SubscriptionHandler
     {
         // Prepare subscription URL and download directly
         var sourceUrl = Utils.GetPunycode(item.Url.TrimEx());
-        var requestUrl = sourceUrl;
+        var downloadSourceUrl = SubscriptionSecureHelper.ToDownloadUrl(sourceUrl);
+        var requestUrl = downloadSourceUrl;
 
         // If conversion is needed
         if (item.ConvertTarget.IsNotEmpty())
@@ -132,7 +134,7 @@ public static class SubscriptionHandler
                 ? Global.SubConvertUrls.FirstOrDefault()
                 : config.ConstItem.SubConvertUrl;
 
-            requestUrl = string.Format(subConvertUrl!, Utils.UrlEncode(sourceUrl));
+            requestUrl = string.Format(subConvertUrl!, Utils.UrlEncode(downloadSourceUrl));
 
             if (!requestUrl.Contains("target="))
             {

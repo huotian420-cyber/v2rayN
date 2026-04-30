@@ -10,6 +10,20 @@ public static class SubscriptionSecureHelper
 
     private const string SecureSubscriptionVersion = "xray-subscription-sealed-v1";
     private const string SecureSubscriptionAlgorithm = "aes-256-gcm";
+    private const string GenericSecureSubscriptionKeyName = "key";
+    private static readonly HashSet<string> SecureSubscriptionKeyNames = new(StringComparer.Ordinal)
+    {
+        SecureSubscriptionKeyFragment,
+        GenericSecureSubscriptionKeyName,
+        "sub_key",
+        "subscription_key"
+    };
+    private static readonly HashSet<string> SecureSubscriptionDownloadKeyNames = new(StringComparer.Ordinal)
+    {
+        SecureSubscriptionKeyFragment,
+        "sub_key",
+        "subscription_key"
+    };
     private static readonly JsonSerializerOptions _jsonSerializerOptions = new()
     {
         PropertyNameCaseInsensitive = true
@@ -23,7 +37,13 @@ public static class SubscriptionSecureHelper
 
         public string? Nonce { get; set; }
 
+        public string? Iv { get; set; }
+
         public string? Ciphertext { get; set; }
+
+        public string? Data { get; set; }
+
+        public string? Payload { get; set; }
     }
 
     public static string ResolveDownloadedContent(string subscriptionUrl, string? responseContent)
@@ -50,13 +70,20 @@ public static class SubscriptionSecureHelper
             return body;
         }
 
-        if (envelope.Nonce.IsNullOrEmpty() || envelope.Ciphertext.IsNullOrEmpty())
+        if (key.Length != 32)
+        {
+            throw new InvalidOperationException("Secure subscription key must be 32 bytes.");
+        }
+
+        var nonceValue = envelope.Nonce ?? envelope.Iv;
+        var cipherValue = envelope.Ciphertext ?? envelope.Data ?? envelope.Payload;
+        if (nonceValue.IsNullOrEmpty() || cipherValue.IsNullOrEmpty())
         {
             throw new InvalidOperationException("Secure subscription payload is incomplete.");
         }
 
-        var nonce = DecodeBase64Url(envelope.Nonce);
-        var cipherPayload = DecodeBase64Url(envelope.Ciphertext);
+        var nonce = DecodeBase64Url(nonceValue);
+        var cipherPayload = DecodeBase64Url(cipherValue);
         if (cipherPayload.Length <= 16)
         {
             throw new InvalidOperationException("Secure subscription payload is invalid.");
@@ -85,6 +112,18 @@ public static class SubscriptionSecureHelper
         return Encoding.UTF8.GetString(plainBytes).Trim();
     }
 
+    public static string ToDownloadUrl(string subscriptionUrl)
+    {
+        var trimmed = subscriptionUrl.TrimEx();
+        if (trimmed.IsNullOrEmpty())
+        {
+            return string.Empty;
+        }
+
+        var withoutFragment = trimmed.Split('#', 2)[0];
+        return RemoveSecureKeyQueryParameters(withoutFragment);
+    }
+
     private static bool TryResolveFragmentKey(string subscriptionUrl, out byte[] key)
     {
         key = [];
@@ -95,17 +134,28 @@ public static class SubscriptionSecureHelper
         }
 
         var uri = Utils.TryUri(subscriptionUrl);
-        if (uri == null || uri.Fragment.IsNullOrEmpty())
+        if (uri == null)
         {
             return false;
         }
 
-        var rawFragment = uri.Fragment.TrimStart('#');
-        foreach (var segment in rawFragment.Split('&', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        return TryResolveKeyFromParameterText(uri.Fragment.TrimStart('#'), out key)
+            || TryResolveKeyFromParameterText(uri.Query.TrimStart('?'), out key);
+    }
+
+    private static bool TryResolveKeyFromParameterText(string raw, out byte[] key)
+    {
+        key = [];
+        if (raw.IsNullOrEmpty())
+        {
+            return false;
+        }
+
+        foreach (var segment in raw.Split('&', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
         {
             var parts = segment.Split('=', 2);
             var name = Uri.UnescapeDataString(parts[0]);
-            if (!string.Equals(name, SecureSubscriptionKeyFragment, StringComparison.Ordinal))
+            if (!SecureSubscriptionKeyNames.Contains(name))
             {
                 continue;
             }
@@ -116,11 +166,58 @@ public static class SubscriptionSecureHelper
                 return false;
             }
 
-            key = DecodeBase64Url(value);
+            try
+            {
+                key = DecodeBase64Url(value);
+            }
+            catch (FormatException) when (string.Equals(name, GenericSecureSubscriptionKeyName, StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            if (string.Equals(name, GenericSecureSubscriptionKeyName, StringComparison.Ordinal) && key.Length != 32)
+            {
+                key = [];
+                continue;
+            }
+
             return key.Length > 0;
         }
 
         return false;
+    }
+
+    private static string RemoveSecureKeyQueryParameters(string url)
+    {
+        var queryIndex = url.IndexOf('?');
+        if (queryIndex < 0)
+        {
+            return url;
+        }
+
+        var baseUrl = url[..queryIndex];
+        var query = url[(queryIndex + 1)..];
+        if (query.IsNullOrEmpty())
+        {
+            return baseUrl;
+        }
+
+        var keptParameters = query.Split('&', StringSplitOptions.RemoveEmptyEntries)
+            .Where(segment =>
+            {
+                var name = segment.Split('=', 2)[0];
+                try
+                {
+                    return !SecureSubscriptionDownloadKeyNames.Contains(Uri.UnescapeDataString(name));
+                }
+                catch
+                {
+                    return true;
+                }
+            })
+            .ToArray();
+
+        return keptParameters.Length == 0 ? baseUrl : $"{baseUrl}?{string.Join("&", keptParameters)}";
     }
 
     private static bool TryParseEnvelope(string body, out SecureSubscriptionEnvelope envelope)

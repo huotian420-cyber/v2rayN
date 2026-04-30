@@ -29,7 +29,7 @@ public class SubEditViewModel : MyReactiveObject
             return;
         }
 
-        var url = SelectedSource.Url;
+        var url = SubscriptionSecureHelper.ToDownloadUrl(SelectedSource.Url);
         if (url.IsNotEmpty())
         {
             var uri = Utils.TryUri(url);
