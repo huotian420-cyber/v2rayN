@@ -124,6 +124,11 @@ public static class SubscriptionSecureHelper
         return RemoveSecureKeyQueryParameters(withoutFragment);
     }
 
+    public static bool HasSecureSubscriptionKey(string subscriptionUrl)
+    {
+        return TryResolveFragmentKey(subscriptionUrl, out _);
+    }
+
     private static bool TryResolveFragmentKey(string subscriptionUrl, out byte[] key)
     {
         key = [];
@@ -135,6 +140,11 @@ public static class SubscriptionSecureHelper
 
         var uri = Utils.TryUri(subscriptionUrl);
         if (uri == null)
+        {
+            return false;
+        }
+        if (!string.Equals(uri.Scheme, Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase) &&
+            !string.Equals(uri.Scheme, Uri.UriSchemeHttp, StringComparison.OrdinalIgnoreCase))
         {
             return false;
         }
@@ -170,18 +180,18 @@ public static class SubscriptionSecureHelper
             {
                 key = DecodeBase64Url(value);
             }
-            catch (FormatException) when (string.Equals(name, GenericSecureSubscriptionKeyName, StringComparison.Ordinal))
+            catch (FormatException)
             {
                 continue;
             }
 
-            if (string.Equals(name, GenericSecureSubscriptionKeyName, StringComparison.Ordinal) && key.Length != 32)
+            if (key.Length != 32)
             {
                 key = [];
                 continue;
             }
 
-            return key.Length > 0;
+            return true;
         }
 
         return false;

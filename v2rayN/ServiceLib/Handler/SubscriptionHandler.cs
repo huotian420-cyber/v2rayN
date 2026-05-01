@@ -126,9 +126,10 @@ public static class SubscriptionHandler
         var sourceUrl = Utils.GetPunycode(item.Url.TrimEx());
         var downloadSourceUrl = SubscriptionSecureHelper.ToDownloadUrl(sourceUrl);
         var requestUrl = downloadSourceUrl;
+        var isSecureSubscription = SubscriptionSecureHelper.HasSecureSubscriptionKey(sourceUrl);
 
         // If conversion is needed
-        if (item.ConvertTarget.IsNotEmpty())
+        if (item.ConvertTarget.IsNotEmpty() && !isSecureSubscription)
         {
             var subConvertUrl = config.ConstItem.SubConvertUrl.IsNullOrEmpty()
                 ? Global.SubConvertUrls.FirstOrDefault()

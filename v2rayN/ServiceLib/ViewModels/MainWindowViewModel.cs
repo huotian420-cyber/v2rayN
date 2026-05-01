@@ -381,6 +381,7 @@ public class MainWindowViewModel : MyReactiveObject
         if (ret > 0)
         {
             RefreshSubscriptions();
+            await UpdateImportedSecureSubscriptionsAsync(clipboardData);
             await RefreshServers();
             NoticeManager.Instance.Enqueue(string.Format(ResUI.SuccessfullyImportedServerViaClipboard, ret));
         }
@@ -431,12 +432,73 @@ public class MainWindowViewModel : MyReactiveObject
             if (ret > 0)
             {
                 RefreshSubscriptions();
+                await UpdateImportedSecureSubscriptionsAsync(result);
                 await RefreshServers();
                 NoticeManager.Instance.Enqueue(ResUI.SuccessfullyImportedServerViaScan);
             }
             else
             {
                 NoticeManager.Instance.Enqueue(ResUI.OperationFailed);
+            }
+        }
+    }
+
+    private async Task UpdateImportedSecureSubscriptionsAsync(string? sourceText)
+    {
+        var importedUrls = ExtractSecureSubscriptionUrls(sourceText);
+        if (importedUrls.Count == 0)
+        {
+            return;
+        }
+
+        var subItems = await AppManager.Instance.SubItems();
+        if (subItems is not { Count: > 0 })
+        {
+            return;
+        }
+
+        foreach (var item in subItems.Where(item => importedUrls.Contains(item.Url.TrimEx())))
+        {
+            await SubscriptionHandler.UpdateProcess(_config, item.Id, false, UpdateTaskHandler);
+        }
+    }
+
+    private static HashSet<string> ExtractSecureSubscriptionUrls(string? sourceText)
+    {
+        var urls = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var text in GetImportCandidateTexts(sourceText))
+        {
+            foreach (var token in text.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+            {
+                if (token.StartsWith(Global.HttpsProtocol, StringComparison.OrdinalIgnoreCase)
+                    || token.StartsWith(Global.HttpProtocol, StringComparison.OrdinalIgnoreCase))
+                {
+                    if (SubscriptionSecureHelper.HasSecureSubscriptionKey(token))
+                    {
+                        urls.Add(token);
+                    }
+                }
+            }
+        }
+        return urls;
+    }
+
+    private static IEnumerable<string> GetImportCandidateTexts(string? sourceText)
+    {
+        var text = sourceText.TrimEx();
+        if (text.IsNullOrEmpty())
+        {
+            yield break;
+        }
+
+        yield return text;
+
+        if (Utils.IsBase64String(text))
+        {
+            var decoded = Utils.Base64Decode(text);
+            if (decoded.IsNotEmpty())
+            {
+                yield return decoded;
             }
         }
     }

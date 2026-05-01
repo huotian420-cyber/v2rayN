@@ -1813,6 +1813,12 @@ public static class ConfigHandler
     /// <returns>0 if successful, -1 if failed</returns>
     public static async Task<int> AddSubItem(Config config, string url)
     {
+        url = url.TrimEx();
+        if (url.IsNullOrEmpty())
+        {
+            return -1;
+        }
+
         //already exists
         var count = await SQLiteHelper.Instance.TableAsync<SubItem>().CountAsync(e => e.Url == url);
         if (count > 0)

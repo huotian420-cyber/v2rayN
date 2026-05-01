@@ -47,6 +47,31 @@ public class SubscriptionSecureHelperTests
     }
 
     [Fact]
+    public void HasSecureSubscriptionKey_WithPanelSecureUrl_ShouldReturnTrue()
+    {
+        var key = RandomNumberGenerator.GetBytes(32);
+        var subscriptionUrl = $"https://panel.example.com/panelx/subscriptions/v2r-secure.json?access_token=test#{SubscriptionSecureHelper.SecureSubscriptionKeyFragment}={ToBase64Url(key)}";
+
+        SubscriptionSecureHelper.HasSecureSubscriptionKey(subscriptionUrl).Should().BeTrue();
+    }
+
+    [Fact]
+    public void HasSecureSubscriptionKey_WithNonHttpUrl_ShouldReturnFalse()
+    {
+        var key = RandomNumberGenerator.GetBytes(32);
+
+        SubscriptionSecureHelper.HasSecureSubscriptionKey($"ftp://panel.example.com/sub#{SubscriptionSecureHelper.SecureSubscriptionKeyFragment}={ToBase64Url(key)}").Should().BeFalse();
+        SubscriptionSecureHelper.HasSecureSubscriptionKey($"not-a-url#{SubscriptionSecureHelper.SecureSubscriptionKeyFragment}={ToBase64Url(key)}").Should().BeFalse();
+    }
+
+    [Fact]
+    public void HasSecureSubscriptionKey_WithInvalidKey_ShouldReturnFalse()
+    {
+        SubscriptionSecureHelper.HasSecureSubscriptionKey($"https://panel.example.com/sub#{SubscriptionSecureHelper.SecureSubscriptionKeyFragment}=not-base64").Should().BeFalse();
+        SubscriptionSecureHelper.HasSecureSubscriptionKey($"https://panel.example.com/sub#{SubscriptionSecureHelper.SecureSubscriptionKeyFragment}=AQID").Should().BeFalse();
+    }
+
+    [Fact]
     public void ToDownloadUrl_ShouldKeepRegularKeyQueryParameter()
     {
         var subscriptionUrl = "https://panel.example.com/sub?key=provider-token#name";
