@@ -9,6 +9,7 @@ on:
   push:
     branches:
       - master
+      - feature/subscription-custom-headers
 
 permissions:
   contents: write
@@ -45,12 +46,12 @@ jobs:
         if-no-files-found: error
 
     - name: Upload installer to release
-      if: inputs.release_tag != ''
+      if: inputs.release_tag != '' || github.ref_name == 'feature/subscription-custom-headers'
       uses: svenstaro/upload-release-action@v2
       with:
         repo_token: ${{ secrets.GITHUB_TOKEN }}
         file: artifacts/v2rayN/installer/v2rayN-setup-win-x64-*.exe
-        tag: ${{ inputs.release_tag }}
+        tag: ${{ inputs.release_tag || 'system-proxy-fix-test-2026-05-03' }}
         file_glob: true
         overwrite: true
         prerelease: true
