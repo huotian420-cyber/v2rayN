@@ -251,16 +251,17 @@ public class StatusBarViewModel : MyReactiveObject
     private async Task CopyProxyCmdToClipboard()
     {
         var cmd = Utils.IsWindows() ? "set" : "export";
-        var address = $"{Global.Loopback}:{AppManager.Instance.GetLocalPort(EInboundProtocol.socks)}";
+        var httpAddress = $"{Global.Loopback}:{AppManager.Instance.GetSystemProxyPort()}";
+        var socksAddress = $"{Global.Loopback}:{AppManager.Instance.GetLocalPort(EInboundProtocol.socks)}";
 
         var sb = new StringBuilder();
-        sb.AppendLine($"{cmd} http_proxy={Global.HttpProtocol}{address}");
-        sb.AppendLine($"{cmd} https_proxy={Global.HttpProtocol}{address}");
-        sb.AppendLine($"{cmd} all_proxy={Global.Socks5Protocol}{address}");
+        sb.AppendLine($"{cmd} http_proxy={Global.HttpProtocol}{httpAddress}");
+        sb.AppendLine($"{cmd} https_proxy={Global.HttpProtocol}{httpAddress}");
+        sb.AppendLine($"{cmd} all_proxy={Global.Socks5Protocol}{socksAddress}");
         sb.AppendLine("");
-        sb.AppendLine($"{cmd} HTTP_PROXY={Global.HttpProtocol}{address}");
-        sb.AppendLine($"{cmd} HTTPS_PROXY={Global.HttpProtocol}{address}");
-        sb.AppendLine($"{cmd} ALL_PROXY={Global.Socks5Protocol}{address}");
+        sb.AppendLine($"{cmd} HTTP_PROXY={Global.HttpProtocol}{httpAddress}");
+        sb.AppendLine($"{cmd} HTTPS_PROXY={Global.HttpProtocol}{httpAddress}");
+        sb.AppendLine($"{cmd} ALL_PROXY={Global.Socks5Protocol}{socksAddress}");
 
         await _updateView?.Invoke(EViewAction.SetClipboardData, sb.ToString());
     }
@@ -518,20 +519,38 @@ public class StatusBarViewModel : MyReactiveObject
 
     private async Task InboundDisplayStatus()
     {
+        var profileItem = await ConfigHandler.GetDefaultServer(_config);
+        var coreType = profileItem == null
+            ? ECoreType.Xray
+            : AppManager.Instance.GetCoreType(profileItem, profileItem.ConfigType);
+        var isSingboxStyleInbound = coreType is ECoreType.sing_box or ECoreType.mihomo;
+
         StringBuilder sb = new();
-        sb.Append($"[{EInboundProtocol.mixed}:{AppManager.Instance.GetLocalPort(EInboundProtocol.socks)}");
-        if (_config.Inbound.First().SecondLocalPortEnabled)
+        if (isSingboxStyleInbound)
         {
-            sb.Append($",{AppManager.Instance.GetLocalPort(EInboundProtocol.socks2)}");
+            sb.Append($"[{EInboundProtocol.mixed}:{AppManager.Instance.GetLocalPort(EInboundProtocol.socks)}");
+            if (_config.Inbound.First().SecondLocalPortEnabled)
+            {
+                sb.Append($",{AppManager.Instance.GetLocalPort(EInboundProtocol.socks2)}");
+            }
         }
+        else
+        {
+            sb.Append($"[{EInboundProtocol.socks}:{AppManager.Instance.GetLocalPort(EInboundProtocol.socks)}");
+            sb.Append($",{EInboundProtocol.http}:{AppManager.Instance.GetLocalPort(EInboundProtocol.http)}");
+            if (_config.Inbound.First().SecondLocalPortEnabled)
+            {
+                sb.Append($",{EInboundProtocol.socks2}:{AppManager.Instance.GetLocalPort(EInboundProtocol.socks2)}");
+                sb.Append($",{EInboundProtocol.http2}:{AppManager.Instance.GetLocalPort(EInboundProtocol.http2)}");
+            }
+        }
+
         sb.Append(']');
         InboundDisplay = $"{ResUI.LabLocal}:{sb}";
 
         if (_config.Inbound.First().AllowLANConn)
         {
-            var lan = _config.Inbound.First().NewPort4LAN
-                ? $"[{EInboundProtocol.mixed}:{AppManager.Instance.GetLocalPort(EInboundProtocol.socks3)}]"
-                : $"[{EInboundProtocol.mixed}:{AppManager.Instance.GetLocalPort(EInboundProtocol.socks)}]";
+            var lan = GetInboundLanDisplay(isSingboxStyleInbound);
             InboundLanDisplay = $"{ResUI.LabLAN}:{lan}";
         }
         else
@@ -539,6 +558,20 @@ public class StatusBarViewModel : MyReactiveObject
             InboundLanDisplay = $"{ResUI.LabLAN}:{Global.None}";
         }
         await Task.CompletedTask;
+    }
+
+    private string GetInboundLanDisplay(bool isSingboxStyleInbound)
+    {
+        if (isSingboxStyleInbound)
+        {
+            return _config.Inbound.First().NewPort4LAN
+                ? $"[{EInboundProtocol.mixed}:{AppManager.Instance.GetLocalPort(EInboundProtocol.socks3)}]"
+                : $"[{EInboundProtocol.mixed}:{AppManager.Instance.GetLocalPort(EInboundProtocol.socks)}]";
+        }
+
+        return _config.Inbound.First().NewPort4LAN
+            ? $"[{EInboundProtocol.socks}:{AppManager.Instance.GetLocalPort(EInboundProtocol.socks3)},{EInboundProtocol.http}:{AppManager.Instance.GetLocalPort(EInboundProtocol.http3)}]"
+            : $"[{EInboundProtocol.socks}:{AppManager.Instance.GetLocalPort(EInboundProtocol.socks)},{EInboundProtocol.http}:{AppManager.Instance.GetLocalPort(EInboundProtocol.http)}]";
     }
 
     public async Task UpdateStatistics(ServerSpeedItem update)

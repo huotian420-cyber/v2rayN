@@ -15,7 +15,7 @@ public static class SysProxyHandler
 
         try
         {
-            var port = AppManager.Instance.GetLocalPort(EInboundProtocol.socks);
+            var port = AppManager.Instance.GetSystemProxyPort();
             var exceptions = config.SystemProxyItem.SystemProxyExceptions.Replace(" ", "");
             if (port <= 0)
             {
@@ -25,7 +25,7 @@ public static class SysProxyHandler
             {
                 case ESysProxyType.ForcedChange when Utils.IsWindows():
                     {
-                        GetWindowsProxyString(config, port, out var strProxy, out var strExceptions);
+                        GetWindowsProxyString(config, out var strProxy, out var strExceptions);
                         ProxySettingWindows.SetProxy(strProxy, strExceptions, 2);
                         break;
                     }
@@ -50,7 +50,7 @@ public static class SysProxyHandler
                     break;
 
                 case ESysProxyType.Pac when Utils.IsWindows():
-                    await SetWindowsProxyPac(port);
+                    await SetWindowsProxyPac();
                     break;
             }
 
@@ -66,7 +66,7 @@ public static class SysProxyHandler
         return true;
     }
 
-    private static void GetWindowsProxyString(Config config, int port, out string strProxy, out string strExceptions)
+    private static void GetWindowsProxyString(Config config, out string strProxy, out string strExceptions)
     {
         strExceptions = config.SystemProxyItem.SystemProxyExceptions.Replace(" ", "");
         if (config.SystemProxyItem.NotProxyLocalAddress)
@@ -74,24 +74,26 @@ public static class SysProxyHandler
             strExceptions = $"<local>;{strExceptions}";
         }
 
+        var httpPort = AppManager.Instance.GetSystemProxyPort();
+        var socksPort = AppManager.Instance.GetLocalPort(EInboundProtocol.socks);
         strProxy = string.Empty;
         if (config.SystemProxyItem.SystemProxyAdvancedProtocol.IsNullOrEmpty())
         {
-            strProxy = $"{Global.Loopback}:{port}";
+            strProxy = $"http={Global.Loopback}:{httpPort};https={Global.Loopback}:{httpPort};socks={Global.Loopback}:{socksPort}";
         }
         else
         {
             strProxy = config.SystemProxyItem.SystemProxyAdvancedProtocol
                 .Replace("{ip}", Global.Loopback)
-                .Replace("{http_port}", port.ToString())
-                .Replace("{socks_port}", port.ToString());
+                .Replace("{http_port}", httpPort.ToString())
+                .Replace("{socks_port}", socksPort.ToString());
         }
     }
 
-    private static async Task SetWindowsProxyPac(int port)
+    private static async Task SetWindowsProxyPac()
     {
         var portPac = AppManager.Instance.GetLocalPort(EInboundProtocol.pac);
-        await PacManager.Instance.StartAsync(port, portPac);
+        await PacManager.Instance.StartAsync(AppManager.Instance.GetSystemProxyPort(), portPac);
         var strProxy = $"{Global.HttpProtocol}{Global.Loopback}:{portPac}/pac?t={DateTime.Now.Ticks}";
         ProxySettingWindows.SetProxy(strProxy, "", 4);
     }

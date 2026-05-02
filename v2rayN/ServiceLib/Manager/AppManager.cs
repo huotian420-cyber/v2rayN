@@ -8,6 +8,7 @@ public sealed class AppManager
     private Config _config;
     private int? _statePort;
     private int? _statePort2;
+    private int? _systemProxyPort;
     public static AppManager Instance => _instance.Value;
     public Config Config => _config;
 
@@ -158,6 +159,24 @@ public sealed class AppManager
     {
         var localPort = _config.Inbound.FirstOrDefault(t => t.Protocol == nameof(EInboundProtocol.socks))?.LocalPort ?? 10808;
         return localPort + (int)protocol;
+    }
+
+    public int GetSystemProxyPort()
+    {
+        return _systemProxyPort ?? GetLocalPort(EInboundProtocol.socks);
+    }
+
+    public void SetSystemProxyPort(ECoreType mainCoreType)
+    {
+        _systemProxyPort = mainCoreType == ECoreType.sing_box || mainCoreType == ECoreType.mihomo
+            ? GetLocalPort(EInboundProtocol.socks)
+            : GetLocalPort(EInboundProtocol.http);
+    }
+
+    public void ClearRuntimeProxyState()
+    {
+        _systemProxyPort = null;
+        RunningCoreType = default;
     }
 
     #endregion Config

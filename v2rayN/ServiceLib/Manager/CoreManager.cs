@@ -59,12 +59,12 @@ public class CoreManager
 
     /// <param name="mainContext">Resolved main context (with pre-socks ports already merged if applicable).</param>
     /// <param name="preContext">Optional pre-socks context passed to <see cref="CoreStartPreService"/>.</param>
-    public async Task LoadCore(CoreConfigContext? mainContext, CoreConfigContext? preContext)
+    public async Task<bool> LoadCore(CoreConfigContext? mainContext, CoreConfigContext? preContext)
     {
         if (mainContext == null)
         {
             await UpdateFunc(false, ResUI.CheckServerSettings);
-            return;
+            return false;
         }
 
         var node = mainContext.Node;
@@ -73,7 +73,7 @@ public class CoreManager
         if (result.Success != true)
         {
             await UpdateFunc(true, result.Msg);
-            return;
+            return false;
         }
 
         await UpdateFunc(false, $"{node.GetSummary()}");
@@ -89,14 +89,18 @@ public class CoreManager
         }
 
         await CoreStart(mainContext);
-        await CoreStartPreService(preContext);
+        var preServiceStarted = await CoreStartPreService(preContext);
 
-        AppManager.Instance.RunningCoreType = preContext?.RunCoreType ?? mainContext.RunCoreType;
-
-        if (_processService != null)
+        if (_processService != null && preServiceStarted)
         {
+            AppManager.Instance.SetSystemProxyPort(mainContext.RunCoreType);
+            AppManager.Instance.RunningCoreType = preContext?.RunCoreType ?? mainContext.RunCoreType;
             await UpdateFunc(true, $"{node.GetSummary()}");
+            return true;
         }
+
+        await CoreStop();
+        return false;
     }
 
     public async Task<ProcessService?> LoadCoreConfigSpeedtest(List<ServerTestItem> selecteds)
@@ -187,8 +191,12 @@ public class CoreManager
         _processService = proc;
     }
 
-    private async Task CoreStartPreService(CoreConfigContext? preContext)
+    private async Task<bool> CoreStartPreService(CoreConfigContext? preContext)
     {
+        if (preContext == null)
+        {
+            return true;
+        }
         if (_processService is { HasExited: false } && preContext != null)
         {
             var preCoreType = preContext?.Node?.CoreType ?? ECoreType.sing_box;
@@ -200,11 +208,13 @@ public class CoreManager
                 var proc = await RunProcess(coreInfo, Global.CorePreConfigFileName, true, true);
                 if (proc is null)
                 {
-                    return;
+                    return false;
                 }
                 _processPreService = proc;
+                return true;
             }
         }
+        return false;
     }
 
     private async Task UpdateFunc(bool notify, string msg)

@@ -23,6 +23,7 @@ public class Global
     public const string V2raySampleHttpRequestFileName = NamespaceSample + "SampleHttpRequest";
     public const string V2raySampleHttpResponseFileName = NamespaceSample + "SampleHttpResponse";
     public const string V2raySampleInbound = NamespaceSample + "SampleInbound";
+    public const string V2raySampleHttpInbound = NamespaceSample + "SampleHttpInbound";
     public const string V2raySampleOutbound = NamespaceSample + "SampleOutbound";
     public const string V2raySampleTunInbound = NamespaceSample + "SampleTunInbound";
     public const string V2raySampleTunRules = NamespaceSample + "SampleTunRules";

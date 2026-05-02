@@ -25,7 +25,33 @@ public class CoreConfigV2rayServiceTests
         var v2rayConfig = JsonUtils.Deserialize<V2rayConfig>(result.Data!.ToString());
         v2rayConfig.Should().NotBeNull();
         v2rayConfig!.outbounds.Should().Contain(o => o.tag == Global.ProxyTag && o.protocol == "vmess");
-        v2rayConfig.inbounds.Should().Contain(i => i.protocol == nameof(EInboundProtocol.mixed));
+        v2rayConfig.inbounds.Should().Contain(i =>
+            i.tag == nameof(EInboundProtocol.socks)
+            && i.protocol == nameof(EInboundProtocol.socks)
+            && i.port == config.Inbound.First().LocalPort);
+        v2rayConfig.inbounds.Should().Contain(i =>
+            i.tag == nameof(EInboundProtocol.http)
+            && i.protocol == nameof(EInboundProtocol.http)
+            && i.port == config.Inbound.First().LocalPort + (int)EInboundProtocol.http);
+    }
+
+    [Fact]
+    public void GenerateClientSpeedtestConfig_ShouldUseSocksInbound()
+    {
+        var config = CoreConfigTestFactory.CreateConfig(ECoreType.Xray);
+        CoreConfigTestFactory.BindAppManagerConfig(config);
+        var node = CoreConfigTestFactory.CreateVmessNode(ECoreType.Xray);
+        var context = CoreConfigTestFactory.CreateContext(config, node, ECoreType.Xray);
+
+        var result = new CoreConfigV2rayService(context).GenerateClientSpeedtestConfig(10921);
+
+        result.Success.Should().BeTrue();
+        var v2rayConfig = JsonUtils.Deserialize<V2rayConfig>(result.Data!.ToString());
+        v2rayConfig.Should().NotBeNull();
+        v2rayConfig!.inbounds.Should().ContainSingle(i =>
+            i.tag == $"{EInboundProtocol.socks}10921"
+            && i.protocol == nameof(EInboundProtocol.socks)
+            && i.port == 10921);
     }
 
     [Fact]

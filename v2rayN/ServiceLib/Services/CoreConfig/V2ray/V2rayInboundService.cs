@@ -9,26 +9,33 @@ public partial class CoreConfigV2rayService
             var listen = "0.0.0.0";
             var listenPort = AppManager.Instance.GetLocalPort(EInboundProtocol.socks);
             _coreConfig.inbounds = [];
-            var inbound = BuildInbound(_config.Inbound.First(), EInboundProtocol.socks, true);
+            var inbound = BuildInbound(_config.Inbound.First(), EInboundProtocol.socks);
+            var httpInbound = BuildInbound(_config.Inbound.First(), EInboundProtocol.http);
 
             if (!context.IsTunEnabled
                 || (context.IsTunEnabled && _node.Address != Global.Loopback && _node.Port != listenPort))
             {
                 _coreConfig.inbounds.Add(inbound);
+                _coreConfig.inbounds.Add(httpInbound);
 
                 if (_config.Inbound.First().SecondLocalPortEnabled)
                 {
-                    var inbound2 = BuildInbound(_config.Inbound.First(), EInboundProtocol.socks2, true);
+                    var inbound2 = BuildInbound(_config.Inbound.First(), EInboundProtocol.socks2);
+                    var httpInbound2 = BuildInbound(_config.Inbound.First(), EInboundProtocol.http2);
                     _coreConfig.inbounds.Add(inbound2);
+                    _coreConfig.inbounds.Add(httpInbound2);
                 }
 
                 if (_config.Inbound.First().AllowLANConn)
                 {
                     if (_config.Inbound.First().NewPort4LAN)
                     {
-                        var inbound3 = BuildInbound(_config.Inbound.First(), EInboundProtocol.socks3, true);
+                        var inbound3 = BuildInbound(_config.Inbound.First(), EInboundProtocol.socks3);
+                        var httpInbound3 = BuildInbound(_config.Inbound.First(), EInboundProtocol.http3);
                         inbound3.listen = listen;
+                        httpInbound3.listen = listen;
                         _coreConfig.inbounds.Add(inbound3);
+                        _coreConfig.inbounds.Add(httpInbound3);
 
                         //auth
                         if (_config.Inbound.First().User.IsNotEmpty() && _config.Inbound.First().Pass.IsNotEmpty())
@@ -38,11 +45,13 @@ public partial class CoreConfigV2rayService
                             {
                                 new() { user = _config.Inbound.First().User, pass = _config.Inbound.First().Pass }
                             };
+                            httpInbound3.settings.accounts = inbound3.settings.accounts;
                         }
                     }
                     else
                     {
                         inbound.listen = listen;
+                        httpInbound.listen = listen;
                     }
                 }
             }
@@ -70,9 +79,11 @@ public partial class CoreConfigV2rayService
         }
     }
 
-    private Inbounds4Ray BuildInbound(InItem inItem, EInboundProtocol protocol, bool bSocks)
+    private Inbounds4Ray BuildInbound(InItem inItem, EInboundProtocol protocol)
     {
-        var result = EmbedUtils.GetEmbedText(Global.V2raySampleInbound);
+        var result = EmbedUtils.GetEmbedText(IsHttpInbound(protocol)
+            ? Global.V2raySampleHttpInbound
+            : Global.V2raySampleInbound);
         if (result.IsNullOrEmpty())
         {
             return new();
@@ -85,12 +96,16 @@ public partial class CoreConfigV2rayService
         }
         inbound.tag = protocol.ToString();
         inbound.port = inItem.LocalPort + (int)protocol;
-        inbound.protocol = EInboundProtocol.mixed.ToString();
-        inbound.settings.udp = inItem.UdpEnabled;
+        inbound.settings.udp = IsHttpInbound(protocol) ? null : inItem.UdpEnabled;
         inbound.sniffing.enabled = inItem.SniffingEnabled;
         inbound.sniffing.destOverride = inItem.DestOverride;
         inbound.sniffing.routeOnly = inItem.RouteOnly;
 
         return inbound;
+    }
+
+    private static bool IsHttpInbound(EInboundProtocol protocol)
+    {
+        return protocol is EInboundProtocol.http or EInboundProtocol.http2 or EInboundProtocol.http3;
     }
 }
