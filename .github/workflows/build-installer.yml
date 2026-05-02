@@ -2,9 +2,16 @@ name: build Windows installer
 
 on:
   workflow_dispatch:
+    inputs:
+      release_tag:
+        required: false
+        type: string
   push:
     branches:
       - master
+
+permissions:
+  contents: write
 
 jobs:
   build-installer:
@@ -36,3 +43,16 @@ jobs:
         name: v2rayN-installer-win-x64
         path: artifacts/v2rayN/installer/v2rayN-setup-win-x64-*.exe
         if-no-files-found: error
+
+    - name: Upload installer to release
+      if: inputs.release_tag != ''
+      uses: svenstaro/upload-release-action@v2
+      with:
+        repo_token: ${{ secrets.GITHUB_TOKEN }}
+        file: artifacts/v2rayN/installer/v2rayN-setup-win-x64-*.exe
+        tag: ${{ inputs.release_tag }}
+        file_glob: true
+        overwrite: true
+        prerelease: true
+        release_name: v2rayN system proxy fix test build
+        body: Test installer build for the Xray system proxy fix.
