@@ -36,6 +36,19 @@ public class SubscriptionSecureHelperTests
     }
 
     [Fact]
+    public void ResolveDownloadedContent_WithHeadlessSecureUrl_ShouldDecryptPayload()
+    {
+        var key = RandomNumberGenerator.GetBytes(32);
+        var subscriptionUrl = $"https://216.183.230.173:2096/sub/testtoken123456789/v2r-secure.json#{SubscriptionSecureHelper.SecureSubscriptionKeyFragment}={ToBase64Url(key)}";
+        var plainText = "dmxlc3M6Ly8xMjM0";
+        var responseBody = BuildEnvelopeJson(key, plainText);
+
+        var resolved = SubscriptionSecureHelper.ResolveDownloadedContent(subscriptionUrl, responseBody);
+
+        resolved.Should().Be(plainText);
+    }
+
+    [Fact]
     public void ToDownloadUrl_ShouldRemoveLocalSecureKeyAndKeepAccessToken()
     {
         var key = RandomNumberGenerator.GetBytes(32);
@@ -44,6 +57,17 @@ public class SubscriptionSecureHelperTests
         var downloadUrl = SubscriptionSecureHelper.ToDownloadUrl(subscriptionUrl);
 
         downloadUrl.Should().Be("https://panel.example.com/panelx/subscriptions/v2r-secure.json?access_token=test");
+    }
+
+    [Fact]
+    public void ToDownloadUrl_ShouldRemoveHeadlessSecureFragment()
+    {
+        var key = RandomNumberGenerator.GetBytes(32);
+        var subscriptionUrl = $"https://216.183.230.173:2096/sub/testtoken123456789/v2r-secure.json#{SubscriptionSecureHelper.SecureSubscriptionKeyFragment}={ToBase64Url(key)}";
+
+        var downloadUrl = SubscriptionSecureHelper.ToDownloadUrl(subscriptionUrl);
+
+        downloadUrl.Should().Be("https://216.183.230.173:2096/sub/testtoken123456789/v2r-secure.json");
     }
 
     [Fact]
